@@ -1,0 +1,98 @@
+import websocket
+import json
+import signal
+import sys
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
+from webdriver_manager.chrome import ChromeDriverManager
+import time
+import os
+import random
+import requests
+
+def clear_console():
+    if os.name == 'nt':
+        os.system('cls')
+    else:
+        os.system('clear')
+
+ws_url = 'wss://pumpportal.fun/api/data'
+mint_address = ""
+paused = False
+profile_path = os.path.join("<YourUserProfilePath>", "AppData\\Local\\Google\\Chrome\\User Data")
+profile_directory = "YourChromeProfile"
+
+options = webdriver.ChromeOptions()
+options.add_argument(f"user-data-dir={profile_path}")
+options.add_argument(f"profile-directory={profile_directory}")
+
+proxy_list = []
+proxy_index = 0
+
+def fetch_proxies():
+    global proxy_list
+    response = requests.get('https://proxylist.geonode.com/api/proxy-list?limit=500&page=1&sort_by=lastChecked&sort_type=desc')
+    if response.status_code == 200:
+        proxy_list = response.json()['data']
+    else:
+        print("Failed to fetch proxies")
+
+def get_random_proxy():
+    global proxy_index
+    if proxy_list:
+        proxy = proxy_list[proxy_index % len(proxy_list)]
+        proxy_index += 1
+        return f"{proxy['ip']}:{proxy['port']}"
+    return None
+
+def set_random_proxy(options):
+    proxy = get_random_proxy()
+    if proxy:
+        options.add_argument(f'--proxy-server=http://{proxy}')
+
+def initialize_webdriver():
+    global options
+    set_random_proxy(options)
+    return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+
+driver = None
+
+def on_message(ws, message):
+    global mint_address, driver
+    data = json.loads(message)
+    if 'mint' in data:
+        mint_address = data['mint']
+        if not paused:
+            # Your automation logic here
+            pass
+
+# WebSocket event handlers
+def on_open(ws):
+    print("WebSocket opened")
+
+def on_close(ws, close_status_code, close_msg):
+    print("WebSocket closed")
+
+def on_error(ws, error):
+    print(f"WebSocket error: {error}")
+
+# Main function to run the bot
+def run_bot():
+    global driver
+    fetch_proxies()
+    driver = initialize_webdriver()
+
+    ws = websocket.WebSocketApp(ws_url,
+                                on_open=on_open,
+                                on_message=on_message,
+                                on_close=on_close,
+                                on_error=on_error)
+
+    ws.run_forever()
+
+if __name__ == "__main__":
+    run_bot()
